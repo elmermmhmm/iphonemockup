@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>iPhone 14 — Accurate 3D</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{
+    background:transparent;
+    display:flex;flex-direction:column;
+    align-items:center;justify-content:center;
+    min-height:100vh;
+    font-family:-apple-system,sans-serif;
+    overflow:hidden;
+  }
+  canvas{display:block;cursor:grab}
+  canvas:active{cursor:grabbing}
+  .ui{margin-top:14px;display:flex;align-items:center;gap:10px}
+  .hint{font-size:11px;color:rgba(255,255,255,0.2);letter-spacing:.09em;text-transform:uppercase}
+  button{
+    background:rgba(255,255,255,0.05);
+    border:.5px solid rgba(255,255,255,0.16);
+    color:rgba(255,255,255,0.45);
+    font-size:11px;padding:5px 15px;border-radius:20px;
+    cursor:pointer;letter-spacing:.06em;transition:all .2s;
+  }
+  button:hover{background:rgba(255,255,255,0.10);color:rgba(255,255,255,0.8)}
+</style>
+</head>
+<body>
+<canvas id="c" width="560" height="700"></canvas>
+<div class="ui">
+  <span class="hint">drag · scroll · flip</span>
+  <button id="rst">Reset</button>
+  <button id="flip">Flip</button>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(function(){
+"use strict";
+
+const canvas = document.getElementById('c');
+const W = canvas.width, H = canvas.height;
+const renderer = new THREE.WebGLRenderer({canvas, antialias:true, alpha:true});
+renderer.setSize(W,H);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
+renderer.setClearColor(0x000000, 0);
+renderer.physicallyCorrectLights = true;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.2;
+renderer.shadowMap.enabled = true;
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(24, W/H, 0.1, 100);
+camera.position.z = 9.5;
+
+// ── Background removed — transparent for iframe use ─────────────
+
+// ── Environment map ─────────────────────────────────────────────
+const eqC = document.createElement('canvas');
+eqC.width = 2048; eqC.height = 1024;
+const eqX = eqC.getContext('2d');
+const eqH = eqX.createLinearGradient(0,0,2048,0);
+[[0,'#d060e0'],[.10,'#4030c0'],[.22,'#080818'],[.34,'#1828a0'],
+ [.46,'#a04808'],[.55,'#ffe080'],[.64,'#ffa020'],[.74,'#a04808'],
+ [.86,'#6020b0'],[1,'#d060e0']
+].forEach(([t,c])=>eqH.addColorStop(t,c));
+eqX.fillStyle = eqH; eqX.fillRect(0,0,2048,1024);
+const eqV = eqX.createLinearGradient(0,0,0,1024);
+[[0,'rgba(255,255,255,1.0)'],[.12,'rgba(220,230,255,0.5)'],
+ [.35,'rgba(0,0,0,0)'],[1,'rgba(0,0,0,0.80)']
+].forEach(([t,c])=>eqV.addColorStop(t,c));
+eqX.fillStyle = eqV; eqX.fillRect(0,0,2048,1024);
+[[1024,20,120,'rgba(255,255,255,1.0)'],[280,90,90,'rgba(255,220,130,0.95)'],
+ [1700,110,80,'rgba(200,160,255,0.90)'],[60,480,110,'rgba(255,140,30,0.80)'],
+ [1970,460,90,'rgba(100,190,255,0.80)'],[600,60,70,'rgba(255,255,255,0.70)']
+].forEach(([cx,cy,r,c])=>{
+  const g=eqX.createRadialGradient(cx,cy,0,cx,cy,r);
+  g.addColorStop(0,c); g.addColorStop(1,'rgba(0,0,0,0)');
+  eqX.fillStyle=g; eqX.fillRect(0,0,2048,1024);
+});
+const eqTex = new THREE.CanvasTexture(eqC);
+eqTex.mapping = THREE.EquirectangularReflectionMapping;
+const pmrem = new THREE.PMREMGenerator(renderer);
+pmrem.compileEquirectangularShader();
+const envMap = pmrem.fromEquirectangular(eqTex).texture;
+scene.environment = envMap;
+pmrem.dispose(); eqTex.dispose();
+
+// ── Lights ──────────────────────────────────────────────────────
+scene.add(new THREE.AmbientLight(0xffffff, 0.12));
+[[0xfff2e8,2.8, 2.5, 5,  6, true ],
+ [0xaac0ff,1.1,-4,   1,  2, false],
+ [0xffffff,2.0, 0.5,-6, -3, false],
+ [0xcc88ff,0.8, 5,   2, -3, false],
+ [0xffffff,0.9, 0,  12,  1, false]
+].forEach(([col,int,x,y,z,sh])=>{
+  const l = new THREE.DirectionalLight(col, int);
+  l.position.set(x,y,z);
+  if(sh){ l.castShadow=true; l.shadow.mapSize.set(2048,2048); }
+  scene.add(l);
+});
+
+// ── Helpers ─────────────────────────────────────────────────────
+function smat(col, metal, rough, envI) {
+  return new THREE.MeshStandardMaterial({
+    color:col, metalness:metal, roughness:rough, envMap, envMapIntensity:envI
+  });
+}
+
+// Rounded-rect Shape
+function rRect(w,h,r) {
+  const s = new THREE.Shape();
+  s.moveTo(-w/2+r, -h/2);
+  s.lineTo( w/2-r, -h/2); s.quadraticCurveTo( w/2,-h/2, w/2,-h/2+r);
+  s.lineTo( w/2,   h/2-r); s.quadraticCurveTo( w/2, h/2, w/2-r, h/2);
+  s.lineTo(-w/2+r,  h/2); s.quadraticCurveTo(-w/2, h/2,-w/2, h/2-r);
+  s.lineTo(-w/2, -h/2+r); s.quadraticCurveTo(-w/2,-h/2,-w/2+r,-h/2);
+  return s;
+}
+
+// Stadium / capsule Shape (pill with rounded ends)
+function stadiumShape(length, thickness) {
+  const r = thickness / 2;
+  const half = length / 2 - r;
+  const s = new THREE.Shape();
+  s.moveTo(-half, -r);
+  s.lineTo( half, -r);
+  s.absarc(half, 0, r, -Math.PI/2, Math.PI/2, false);
+  s.lineTo(-half, r);
+  s.absarc(-half, 0, r, Math.PI/2, -Math.PI/2, false);
+  return s;
+}
+
+// Extrude shorthand
+function extrude(shape, depth, bev, bevSegs, curvSegs) {
+  return new THREE.ExtrudeGeometry(shape, {
+    depth: depth,
+    bevelEnabled: bev > 0,
+    bevelSegments: bevSegs || 8,
+    bevelSize: bev || 0,
+    bevelThickness: bev || 0,
+    curveSegments: curvSegs || 24
+  });
+}
+
+// Add mesh helper — no Object.assign, explicit set calls only
+function addMesh(geo, mat, G) {
+  const m = new THREE.Mesh(geo, mat);
+  m.castShadow = true;
+  m.receiveShadow = true;
+  G.add(m);
+  return m;
+}
+
+// ── Scale: 1 unit = 71.5 mm (real iPhone 14 width) ─────────────
+const U  = 1 / 71.5;
+const PW = 71.5  * U;   // 1.000
+const PH = 146.7 * U;   // 2.051
+const PD = 7.8   * U;   // 0.109
+const PR = 7.35  * U;   // corner radius
+
+const G = new THREE.Group();
+scene.add(G);
+
+// ── Body ────────────────────────────────────────────────────────
+const bodyGeo = extrude(rRect(PW,PH,PR,32), PD, 1.2*U, 10, 32);
+bodyGeo.center();
+addMesh(bodyGeo, smat(0xd4d8e2,1.0,0.07,2.6), G);
+
+// ── Screen texture ──────────────────────────────────────────────
+const sc = document.createElement('canvas');
+sc.width = 390; sc.height = 844;
+const sC = sc.getContext('2d');
+const sbg = sC.createLinearGradient(0,0,0,844);
+sbg.addColorStop(0,'#050510'); sbg.addColorStop(.5,'#08121e'); sbg.addColorStop(1,'#050510');
+sC.fillStyle = sbg; sC.fillRect(0,0,390,844);
+[[310,170,210,'rgba(80,55,210,0.13)'],[70,680,190,'rgba(25,90,230,0.10)']].forEach(([cx,cy,r,col])=>{
+  const g=sC.createRadialGradient(cx,cy,0,cx,cy,r);
+  g.addColorStop(0,col); g.addColorStop(1,'rgba(0,0,0,0)');
+  sC.fillStyle=g; sC.fillRect(0,0,390,844);
+});
+sC.fillStyle='rgba(255,255,255,0.9)'; sC.font='600 17px -apple-system,sans-serif';
+sC.textAlign='left'; sC.fillText('9:41',28,58);
+sC.textAlign='right'; sC.fillStyle='rgba(255,255,255,0.55)';
+sC.font='13px -apple-system,sans-serif'; sC.fillText('●●●  ▐',365,58);
+sC.fillStyle='rgba(255,255,255,0.95)'; sC.font='100 86px -apple-system,sans-serif';
+sC.textAlign='center'; sC.fillText('9:41',195,188);
+sC.fillStyle='rgba(255,255,255,0.4)'; sC.font='400 15px -apple-system,sans-serif';
+sC.fillText('Wednesday, June 3',195,220);
+function pill(ctx,x,y,w,h,r,fill,stroke){
+  ctx.beginPath(); ctx.moveTo(x+r,y); ctx.lineTo(x+w-r,y);
+  ctx.quadraticCurveTo(x+w,y,x+w,y+r); ctx.lineTo(x+w,y+h-r);
+  ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h); ctx.lineTo(x+r,y+h);
+  ctx.quadraticCurveTo(x,y+h,x,y+h-r); ctx.lineTo(x,y+r);
+  ctx.quadraticCurveTo(x,y,x+r,y); ctx.closePath();
+  if(fill){ctx.fillStyle=fill; ctx.fill();}
+  if(stroke){ctx.strokeStyle=stroke; ctx.lineWidth=.5; ctx.stroke();}
+}
+const hg = sC.createLinearGradient(22,274,368,424);
+hg.addColorStop(0,'rgba(88,65,240,0.92)'); hg.addColorStop(1,'rgba(22,115,255,0.92)');
+pill(sC,22,274,346,152,22,hg);
+sC.fillStyle='rgba(255,255,255,0.96)'; sC.font='600 19px -apple-system,sans-serif';
+sC.textAlign='left'; sC.fillText('Portfolio',46,318);
+sC.fillStyle='rgba(255,255,255,0.55)'; sC.font='13px -apple-system,sans-serif';
+sC.fillText('12 case studies · 2025',46,342);
+pill(sC,46,360,236,3,2,'rgba(255,255,255,0.20)');
+pill(sC,46,360,96,3,2,'rgba(255,255,255,0.94)');
+const cg1 = sC.createLinearGradient(22,448,186,574);
+cg1.addColorStop(0,'rgba(15,195,130,0.92)'); cg1.addColorStop(1,'rgba(8,148,92,0.92)');
+pill(sC,22,448,162,126,20,cg1);
+sC.fillStyle='rgba(255,255,255,0.94)'; sC.font='600 14px -apple-system,sans-serif';
+sC.fillText('UX Design',44,490);
+sC.fillStyle='rgba(255,255,255,0.55)'; sC.font='12px -apple-system,sans-serif';
+sC.fillText('Staff IC · FAANG',44,510);
+const cg2 = sC.createLinearGradient(202,448,366,574);
+cg2.addColorStop(0,'rgba(255,115,38,0.92)'); cg2.addColorStop(1,'rgba(212,50,65,0.92)');
+pill(sC,202,448,166,126,20,cg2);
+sC.fillStyle='rgba(255,255,255,0.94)'; sC.font='600 14px -apple-system,sans-serif';
+sC.fillText('AI Products',224,490);
+sC.fillStyle='rgba(255,255,255,0.55)'; sC.font='12px -apple-system,sans-serif';
+sC.fillText('Payments · Health',224,510);
+pill(sC,22,594,346,150,20,'rgba(255,255,255,0.055)','rgba(255,255,255,0.09)');
+sC.fillStyle='rgba(255,255,255,0.50)'; sC.font='12px -apple-system,sans-serif';
+sC.fillText('Recent project',46,626);
+sC.fillStyle='rgba(255,255,255,0.96)'; sC.font='600 15px -apple-system,sans-serif';
+sC.fillText('Agentic Payments UI',46,652);
+sC.fillStyle='rgba(255,255,255,0.44)'; sC.font='12px -apple-system,sans-serif';
+sC.fillText('Consent & trust · MCP protocol',46,674);
+pill(sC,148,808,94,5,3,'rgba(255,255,255,0.30)');
+
+// ── Screen plane ────────────────────────────────────────────────
+const bW = 2.2*U, bH = 2.8*U;
+const scrW = PW - bW*2;
+const scrH = PH - bH*2;
+const scrMat = new THREE.MeshStandardMaterial({
+  map: new THREE.CanvasTexture(sc), metalness:0.0, roughness:0.03,
+  envMap, envMapIntensity:0.3
+});
+const scrMesh = new THREE.Mesh(new THREE.PlaneGeometry(scrW, scrH), scrMat);
+scrMesh.position.set(0, 0, PD/2 + 0.001);
+G.add(scrMesh);
+
+// Glass over screen
+const glassMat = new THREE.MeshStandardMaterial({
+  color:0xe0eaff, metalness:0, roughness:0.01,
+  transparent:true, opacity:0.07, envMap, envMapIntensity:1.8
+});
+const glassMesh = new THREE.Mesh(new THREE.PlaneGeometry(scrW, scrH), glassMat);
+glassMesh.position.set(0, 0, PD/2 + 0.0015);
+G.add(glassMesh);
+
+// ── Back panel ──────────────────────────────────────────────────
+const backMesh = new THREE.Mesh(
+  new THREE.PlaneGeometry(PW - 4.4*U, PH - 4.4*U),
+  smat(0xc8ccd8, 1.0, 0.06, 2.6)
+);
+backMesh.rotation.y = Math.PI;
+backMesh.position.set(0, 0, -PD/2 - 0.0005);
+G.add(backMesh);
+
+// ── Dynamic Island ───────────────────────────────────────────────
+// 126pt wide, ~37pt tall at 460pt screen = 19.57 × 5.75 mm
+const DI_W = 19.57 * U;
+const DI_H = 5.0   * U;
+const DI_Y = PH/2 - 9.0*U - DI_H/2;
+const diGeo = extrude(stadiumShape(DI_W, DI_H), 0.4*U, 0, 0, 24);
+diGeo.center();
+const diMesh = new THREE.Mesh(diGeo,
+  new THREE.MeshStandardMaterial({color:0x020204, metalness:0, roughness:0.95}));
+diMesh.position.set(0, DI_Y, PD/2 + 0.002);
+G.add(diMesh);
+
+// ── Camera bump ──────────────────────────────────────────────────
+// 37×37mm square, 9mm corner radius, centred at (-14mm, +48mm)
+const BUMP_CX  = -14   * U;
+const BUMP_CY  =  48   * U;
+const BUMP_SZ  =  37   * U;
+const BUMP_CR  =  9    * U;
+const BUMP_PRO =  3.2  * U;
+const BUMP_Z   = -PD/2 - BUMP_PRO/2;
+
+const bumpGeo = extrude(rRect(BUMP_SZ, BUMP_SZ, BUMP_CR), BUMP_PRO, 0.8*U, 8, 24);
+bumpGeo.center();
+const bumpMesh = new THREE.Mesh(bumpGeo, smat(0xd4d8e2, 1.0, 0.07, 2.6));
+bumpMesh.position.set(BUMP_CX, BUMP_CY, BUMP_Z);
+bumpMesh.rotation.y = Math.PI;
+G.add(bumpMesh);
+
+// Bump border ring — same body color, seamless
+const bumpRingGeo = extrude(rRect(BUMP_SZ+2*U, BUMP_SZ+2*U, BUMP_CR+1.5*U), 0.6*U, 0, 0, 24);
+bumpRingGeo.center();
+const bumpRing = new THREE.Mesh(bumpRingGeo, smat(0xd4d8e2, 1.0, 0.07, 2.6));
+bumpRing.position.set(BUMP_CX, BUMP_CY, -PD/2 - 0.3*U);
+bumpRing.rotation.y = Math.PI;
+G.add(bumpRing);
+
+// ── Lenses ───────────────────────────────────────────────────────
+function addLens(lx, ly, radiusMM, isMain) {
+  const r   = radiusMM * U;
+  const lz  = -PD/2 - BUMP_PRO - 0.5*U;
+
+  // Outer silver ring
+  const ring = new THREE.Mesh(
+    new THREE.TorusGeometry(r, 0.9*U, 6, 52),
+    smat(0xdce0ec, 1.0, 0.04, 3.0)
+  );
+  ring.position.set(lx, ly, lz);
+  G.add(ring);
+
+  // Dark barrel
+  const barrel = new THREE.Mesh(
+    new THREE.CylinderGeometry(r - 0.5*U, r - 0.5*U, 2.5*U, 48),
+    smat(0x0a0a0e, 0.05, 0.05, 0.5)
+  );
+  barrel.rotation.x = Math.PI/2;
+  barrel.position.set(lx, ly, lz);
+  G.add(barrel);
+
+  // Lens glass
+  const glassR = r - 1.8*U;
+  const lensGlass = new THREE.Mesh(
+    new THREE.CircleGeometry(glassR, 48),
+    new THREE.MeshStandardMaterial({
+      color: isMain ? 0x060c1a : 0x040810,
+      metalness:0.0, roughness:0.0,
+      transparent:true, opacity:0.96,
+      envMap, envMapIntensity: isMain ? 1.4 : 1.0
+    })
+  );
+  lensGlass.rotation.y = Math.PI;
+  lensGlass.position.set(lx, ly, lz - 0.2*U);
+  G.add(lensGlass);
+
+  // Inner element ring
+  const innerRing = new THREE.Mesh(
+    new THREE.TorusGeometry(glassR * 0.55, 0.4*U, 4, 36),
+    smat(0x1a2448, 0.0, 0.1, 0.8)
+  );
+  innerRing.position.set(lx, ly, lz - 0.3*U);
+  G.add(innerRing);
+}
+
+// Main (top-left of bump): (-9mm, +9mm) from bump centre
+addLens(BUMP_CX - 9*U, BUMP_CY + 9*U, 7.5, true);
+// Ultrawide (bottom-right): (+7mm, -8mm) from bump centre
+addLens(BUMP_CX + 7*U, BUMP_CY - 8*U, 6.5, false);
+
+// Flash
+const FX = BUMP_CX + 9*U;
+const FY = BUMP_CY + 7*U;
+const FZ = -PD/2 - BUMP_PRO - 0.4*U;
+
+const flashRing = new THREE.Mesh(
+  new THREE.TorusGeometry(4.2*U, 0.7*U, 6, 28),
+  smat(0xdce0ec, 1.0, 0.05, 2.8)
+);
+flashRing.position.set(FX, FY, FZ);
+G.add(flashRing);
+
+const flashGlass = new THREE.Mesh(
+  new THREE.CircleGeometry(3.5*U, 28),
+  new THREE.MeshStandardMaterial({
+    color:0xf0e8c8, metalness:0.2, roughness:0.15,
+    envMap, envMapIntensity:0.8
+  })
+);
+flashGlass.rotation.y = Math.PI;
+flashGlass.position.set(FX, FY, FZ - 0.1*U);
+G.add(flashGlass);
+
+// Mic dot
+const micDot = new THREE.Mesh(
+  new THREE.CylinderGeometry(1.8*U, 1.8*U, 1.0*U, 16),
+  smat(0x141418, 0.1, 0.7, 0.3)
+);
+micDot.rotation.x = Math.PI/2;
+micDot.position.set(BUMP_CX, BUMP_CY - 12*U, FZ);
+G.add(micDot);
+
+
+
+// ── Bottom edge: Lightning port + speaker dots ───────────────────
+const lpGeo = extrude(stadiumShape(9*U, 3.5*U), 0.8*U, 0, 0, 12);
+lpGeo.center();
+const lpMesh = new THREE.Mesh(lpGeo, smat(0x0c0c12, 0.1, 0.9, 0.1));
+lpMesh.rotation.x = Math.PI/2;
+lpMesh.position.set(0, -PH/2 - 0.001, 0);
+G.add(lpMesh);
+
+for (let s of [-1, 1]) {
+  for (let i = 0; i < 5; i++) {
+    const dot = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.8*U, 0.8*U, 0.6*U, 10),
+      smat(0x101015, 0.05, 0.95, 0.1)
+    );
+    dot.rotation.x = Math.PI/2;
+    dot.position.set(s*(13 + i*3.5)*U, -PH/2 - 0.001, 0);
+    G.add(dot);
+  }
+}
+
+// ── Floor removed for transparent background ────────────────────
+
+// ── Interaction ──────────────────────────────────────────────────
+let tRX=-0.08, tRY=0.20, rotX=-0.08, rotY=0.20;
+let vx=0, vy=0, drag=false, px=0, py=0, zoom=9.5;
+
+canvas.addEventListener('mousedown', e=>{drag=true; px=e.clientX; py=e.clientY; vx=vy=0;});
+window.addEventListener('mouseup', ()=>drag=false);
+window.addEventListener('mousemove', e=>{
+  if(!drag) return;
+  tRY += (e.clientX-px)*0.004; tRX += (e.clientY-py)*0.004;
+  vy = (e.clientX-px)*0.004;   vx  = (e.clientY-py)*0.004;
+  tRX = Math.max(-1.4, Math.min(1.4, tRX));
+  tRY = Math.max(-2.2, Math.min(2.2, tRY));
+  px=e.clientX; py=e.clientY;
+});
+canvas.addEventListener('touchstart', e=>{
+  drag=true; px=e.touches[0].clientX; py=e.touches[0].clientY;
+},{passive:true});
+window.addEventListener('touchend', ()=>drag=false);
+window.addEventListener('touchmove', e=>{
+  if(!drag) return;
+  tRY += (e.touches[0].clientX-px)*0.004;
+  tRX += (e.touches[0].clientY-py)*0.004;
+  tRX = Math.max(-1.4, Math.min(1.4, tRX));
+  tRY = Math.max(-2.2, Math.min(2.2, tRY));
+  px=e.touches[0].clientX; py=e.touches[0].clientY;
+},{passive:true});
+canvas.addEventListener('wheel', e=>{
+  zoom = Math.max(5, Math.min(15, zoom + e.deltaY*0.012));
+  camera.position.z = zoom;
+  e.preventDefault();
+},{passive:false});
+
+document.getElementById('rst').addEventListener('click', ()=>{
+  tRX=-0.08; tRY=0.20; zoom=9.5; camera.position.z=zoom;
+});
+let showBack = false;
+document.getElementById('flip').addEventListener('click', ()=>{
+  showBack = !showBack; tRY = showBack ? Math.PI : 0.20; tRX = -0.06;
+});
+
+// ── Render loop ──────────────────────────────────────────────────
+function animate() {
+  requestAnimationFrame(animate);
+  if(!drag){ vx*=0.88; vy*=0.88; tRX+=vx; tRY+=vy; }
+  rotX += (tRX-rotX)*0.10;
+  rotY += (tRY-rotY)*0.10;
+  G.rotation.x = rotX;
+  G.rotation.y = rotY;
+  renderer.render(scene, camera);
+}
+animate();
+
+})();
+</script>
+</body>
+</html>
