@@ -444,15 +444,40 @@ document.getElementById('flip').addEventListener('click', ()=>{
 });
 
 // ── Render loop ──────────────────────────────────────────────────
+const AUTO_SPEED = 0.004;   // radians per frame — adjust to taste
+let lastInteract = 0;       // timestamp of last drag event
+const RESUME_DELAY = 1800;  // ms before auto-spin resumes after drag
+
 function animate() {
   requestAnimationFrame(animate);
-  if(!drag){ vx*=0.88; vy*=0.88; tRX+=vx; tRY+=vy; }
-  rotX += (tRX-rotX)*0.10;
-  rotY += (tRY-rotY)*0.10;
+
+  const now = Date.now();
+  const idle = !drag && (now - lastInteract > RESUME_DELAY);
+
+  if (!drag) {
+    vx *= 0.88; vy *= 0.88;
+    tRX += vx;  tRY += vy;
+  }
+
+  // Auto-rotate when idle — just increment the Y target continuously
+  if (idle) {
+    tRY += AUTO_SPEED;
+    tRX += (0.0 - tRX) * 0.02; // gently level out X tilt while spinning
+  }
+
+  rotX += (tRX - rotX) * 0.10;
+  rotY += (tRY - rotY) * 0.10;
   G.rotation.x = rotX;
   G.rotation.y = rotY;
   renderer.render(scene, camera);
 }
+
+// Track last interaction time so spin resumes after user lets go
+canvas.addEventListener('mousedown', () => lastInteract = Date.now());
+canvas.addEventListener('touchstart', () => lastInteract = Date.now(), {passive:true});
+window.addEventListener('mouseup', () => lastInteract = Date.now());
+window.addEventListener('touchend', () => lastInteract = Date.now());
+
 animate();
 
 })();
