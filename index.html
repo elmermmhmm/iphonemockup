@@ -248,7 +248,7 @@ G.add(scrMesh);
 // ─────────────────────────────────────────────────────────────────
 const BACK_Z = -(PD / 2 + BEVEL);
 const backMesh = new THREE.Mesh(
-  new THREE.PlaneGeometry(PW - 4.4 * U, PH - 4.4 * U),
+  new THREE.ShapeGeometry(rRect(PW, PH, PR), 48),
   smat(0xc8ccd8, 1.0, 0.06, 2.6)
 );
 backMesh.rotation.y = Math.PI;
@@ -312,7 +312,7 @@ addLens(BUMP_CX - 9*U, BUMP_CY + 9*U, 7.5, true);
 let tRX=-0.08, tRY=0.20, rotX=-0.08, rotY=0.20;
 let vx=0, vy=0, drag=false, px=0, py=0, zoom=9.5;
 let lastInteract = 0;
-const AUTO_SPEED   = 0.004;
+const AUTO_SPEED   = 0.00342; // 5% slower
 const RESUME_DELAY = 1800;
 
 canvas.addEventListener('mousedown', e=>{
@@ -360,6 +360,7 @@ function animate() {
   if(idle){ tRY+=AUTO_SPEED; tRX+=(0-tRX)*0.02; }
   rotX+=(tRX-rotX)*0.10; rotY+=(tRY-rotY)*0.10;
   G.rotation.x=rotX; G.rotation.y=rotY;
+  G.rotation.z = 5 * Math.PI / 180; // 5° tilt
   renderer.render(scene,camera);
 }
 animate();
