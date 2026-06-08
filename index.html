@@ -1,375 +1,377 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>iPhone 14 — Pebble</title>
-<style>
+ <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>iPhone 14 — Pebble</title>
+ <style>
   *{margin:0;padding:0;box-sizing:border-box}
   html,body{
-    width:100%;height:100%;
-    background:transparent;
-    display:flex;flex-direction:column;
-    align-items:center;justify-content:center;
-    overflow:hidden;
+   width:100%;height:100%;
+   background:transparent;
+   display:flex;flex-direction:column;
+   align-items:center;justify-content:center;
+   overflow:hidden;
   }
   canvas{display:block;cursor:grab}
   canvas:active{cursor:grabbing}
   .ui{margin-top:12px;display:flex;align-items:center;gap:10px}
   .hint{font-size:11px;color:rgba(255,255,255,0.2);letter-spacing:.09em;text-transform:uppercase}
   button{
-    background:rgba(255,255,255,0.05);border:.5px solid rgba(255,255,255,0.16);
-    color:rgba(255,255,255,0.45);font-size:11px;padding:5px 15px;border-radius:20px;
-    cursor:pointer;letter-spacing:.06em;transition:all .2s;
+   background:rgba(255,255,255,0.05);border:.5px solid rgba(255,255,255,0.16);
+   color:rgba(255,255,255,0.45);font-size:11px;padding:5px 15px;border-radius:20px;
+   cursor:pointer;letter-spacing:.06em;transition:all .2s;
   }
   button:hover{background:rgba(255,255,255,0.10);color:rgba(255,255,255,0.8)}
-</style>
-</head>
-<body>
-<canvas id="c" width="560" height="700"></canvas>
-<div class="ui">
-  <span class="hint">drag · scroll · flip</span>
-  <button id="rst">Reset</button>
-  <button id="flip">Flip</button>
-</div>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script>
-(function(){
-"use strict";
+  </style>
+ </head>
+ <body>
+  <canvas id="c" width="560" height="700"></canvas>canvas>
+  <div class="ui">
+   <span class="hint">drag · scroll · flip</span>span>
+   <button id="rst">Reset</button>button>
+   <button id="flip">Flip</button>button>
+  </div>div>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script>
+   (function(){
+    "use strict";
 
-// ─────────────────────────────────────────────────────────────────
-// RENDERER
-// ─────────────────────────────────────────────────────────────────
-const canvas = document.getElementById('c');
-const W = canvas.width, H = canvas.height;
-const renderer = new THREE.WebGLRenderer({canvas, antialias:true, alpha:true});
-renderer.setSize(W, H);
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-renderer.setClearColor(0x000000, 0);
-renderer.physicallyCorrectLights = true;
-renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.2;
-renderer.shadowMap.enabled = true;
+    // ─────────────────────────────────────────────────────────────────
+    // RENDERER
+    // ─────────────────────────────────────────────────────────────────
+    const canvas = document.getElementById('c');
+    const W = canvas.width, H = canvas.height;
+    const renderer = new THREE.WebGLRenderer({canvas, antialias:true, alpha:true});
+    renderer.setSize(W, H);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setClearColor(0x000000, 0);
+    renderer.physicallyCorrectLights = true;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.2;
+    renderer.shadowMap.enabled = true;
 
-const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(24, W/H, 0.1, 100);
-camera.position.z = 9.5;
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(24, W/H, 0.1, 100);
+    camera.position.z = 9.5;
 
-// ─────────────────────────────────────────────────────────────────
-// IRIDESCENT ENVIRONMENT MAP
-// ─────────────────────────────────────────────────────────────────
-const eqC = document.createElement('canvas');
-eqC.width = 2048; eqC.height = 1024;
-const eqX = eqC.getContext('2d');
+    // ─────────────────────────────────────────────────────────────────
+    // IRIDESCENT ENVIRONMENT MAP
+    // ─────────────────────────────────────────────────────────────────
+    const eqC = document.createElement('canvas');
+    eqC.width = 2048; eqC.height = 1024;
+    const eqX = eqC.getContext('2d');
 
-const eqH = eqX.createLinearGradient(0,0,2048,0);
-[[0,'#d060e0'],[.10,'#4030c0'],[.22,'#080818'],[.34,'#1828a0'],
- [.46,'#a04808'],[.55,'#ffe080'],[.64,'#ffa020'],[.74,'#a04808'],
- [.86,'#6020b0'],[1.0,'#d060e0']
-].forEach(([t,c])=>eqH.addColorStop(t,c));
-eqX.fillStyle=eqH; eqX.fillRect(0,0,2048,1024);
+    const eqH = eqX.createLinearGradient(0,0,2048,0);
+    [[0,'#d060e0'],[.10,'#4030c0'],[.22,'#080818'],[.34,'#1828a0'],
+     [.46,'#a04808'],[.55,'#ffe080'],[.64,'#ffa020'],[.74,'#a04808'],
+     [.86,'#6020b0'],[1.0,'#d060e0']
+     ].forEach(([t,c])=>eqH.addColorStop(t,c));
+    eqX.fillStyle=eqH; eqX.fillRect(0,0,2048,1024);
 
-const eqV = eqX.createLinearGradient(0,0,0,1024);
-[[0,'rgba(255,255,255,1.0)'],[.12,'rgba(220,230,255,0.5)'],
- [.35,'rgba(0,0,0,0)'],[1,'rgba(0,0,0,0.80)']
-].forEach(([t,c])=>eqV.addColorStop(t,c));
-eqX.fillStyle=eqV; eqX.fillRect(0,0,2048,1024);
+    const eqV = eqX.createLinearGradient(0,0,0,1024);
+    [[0,'rgba(255,255,255,1.0)'],[.12,'rgba(220,230,255,0.5)'],
+     [.35,'rgba(0,0,0,0)'],[1,'rgba(0,0,0,0.80)']
+     ].forEach(([t,c])=>eqV.addColorStop(t,c));
+    eqX.fillStyle=eqV; eqX.fillRect(0,0,2048,1024);
 
-[[1024,20,120,'rgba(255,255,255,1.0)'],[280,90,90,'rgba(255,220,130,0.95)'],
- [1700,110,80,'rgba(200,160,255,0.90)'],[60,480,110,'rgba(255,140,30,0.80)'],
- [1970,460,90,'rgba(100,190,255,0.80)'],[600,60,70,'rgba(255,255,255,0.70)']
-].forEach(([cx,cy,r,c])=>{
-  const g=eqX.createRadialGradient(cx,cy,0,cx,cy,r);
-  g.addColorStop(0,c); g.addColorStop(1,'rgba(0,0,0,0)');
-  eqX.fillStyle=g; eqX.fillRect(0,0,2048,1024);
-});
+    [[1024,20,120,'rgba(255,255,255,1.0)'],[280,90,90,'rgba(255,220,130,0.95)'],
+     [1700,110,80,'rgba(200,160,255,0.90)'],[60,480,110,'rgba(255,140,30,0.80)'],
+     [1970,460,90,'rgba(100,190,255,0.80)'],[600,60,70,'rgba(255,255,255,0.70)']
+     ].forEach(([cx,cy,r,c])=>{
+      const g=eqX.createRadialGradient(cx,cy,0,cx,cy,r);
+      g.addColorStop(0,c); g.addColorStop(1,'rgba(0,0,0,0)');
+      eqX.fillStyle=g; eqX.fillRect(0,0,2048,1024);
+     });
 
-const eqTex = new THREE.CanvasTexture(eqC);
-eqTex.mapping = THREE.EquirectangularReflectionMapping;
-const pmrem = new THREE.PMREMGenerator(renderer);
-pmrem.compileEquirectangularShader();
-const envMap = pmrem.fromEquirectangular(eqTex).texture;
-scene.environment = envMap;
-pmrem.dispose(); eqTex.dispose();
+    const eqTex = new THREE.CanvasTexture(eqC);
+    eqTex.mapping = THREE.EquirectangularReflectionMapping;
+    const pmrem = new THREE.PMREMGenerator(renderer);
+    pmrem.compileEquirectangularShader();
+    const envMap = pmrem.fromEquirectangular(eqTex).texture;
+    scene.environment = envMap;
+    pmrem.dispose(); eqTex.dispose();
 
-// ─────────────────────────────────────────────────────────────────
-// LIGHTS
-// ─────────────────────────────────────────────────────────────────
-scene.add(new THREE.AmbientLight(0xffffff, 0.12));
-[[0xfff2e8,2.8, 2.5,  5,  6, true ],
- [0xaac0ff,1.1,-4.0,  1,  2, false],
- [0xffffff,2.0, 0.5, -6, -3, false],
- [0xcc88ff,0.8, 5.0,  2, -3, false],
- [0xffffff,0.9, 0.0, 12,  1, false],
-].forEach(([col,int,x,y,z,sh])=>{
-  const l = new THREE.DirectionalLight(col, int);
-  l.position.set(x,y,z);
-  if(sh){ l.castShadow=true; l.shadow.mapSize.set(2048,2048); }
-  scene.add(l);
-});
+    // ─────────────────────────────────────────────────────────────────
+    // LIGHTS
+    // ─────────────────────────────────────────────────────────────────
+    scene.add(new THREE.AmbientLight(0xffffff, 0.12));
+    [[0xfff2e8,2.8, 2.5, 5, 6, true ],
+     [0xaac0ff,1.1,-4.0, 1, 2, false],
+     [0xffffff,2.0, 0.5, -6, -3, false],
+     [0xcc88ff,0.8, 5.0, 2, -3, false],
+     [0xffffff,0.9, 0.0, 12, 1, false],
+     ].forEach(([col,int,x,y,z,sh])=>{
+      const l = new THREE.DirectionalLight(col, int);
+      l.position.set(x,y,z);
+      if(sh){ l.castShadow=true; l.shadow.mapSize.set(2048,2048); }
+      scene.add(l);
+     });
 
-// ─────────────────────────────────────────────────────────────────
-// HELPERS
-// ─────────────────────────────────────────────────────────────────
-function smat(col, metal, rough, envI) {
-  return new THREE.MeshStandardMaterial({
-    color:col, metalness:metal, roughness:rough, envMap, envMapIntensity:envI
-  });
-}
+    // ─────────────────────────────────────────────────────────────────
+    // HELPERS
+    // ─────────────────────────────────────────────────────────────────
+    function smat(col, metal, rough, envI) {
+     return new THREE.MeshStandardMaterial({
+      color:col, metalness:metal, roughness:rough, envMap, envMapIntensity:envI
+     });
+    }
 
-function rRect(w, h, r) {
-  const s = new THREE.Shape();
-  s.moveTo(-w/2+r, -h/2);
-  s.lineTo( w/2-r, -h/2); s.quadraticCurveTo( w/2,-h/2, w/2,-h/2+r);
-  s.lineTo( w/2,   h/2-r); s.quadraticCurveTo( w/2, h/2, w/2-r, h/2);
-  s.lineTo(-w/2+r,  h/2); s.quadraticCurveTo(-w/2, h/2,-w/2, h/2-r);
-  s.lineTo(-w/2,  -h/2+r); s.quadraticCurveTo(-w/2,-h/2,-w/2+r,-h/2);
-  return s;
-}
+    function rRect(w, h, r) {
+     const s = new THREE.Shape();
+     s.moveTo(-w/2+r, -h/2);
+     s.lineTo( w/2-r, -h/2); s.quadraticCurveTo( w/2,-h/2, w/2,-h/2+r);
+     s.lineTo( w/2, h/2-r); s.quadraticCurveTo( w/2, h/2, w/2-r, h/2);
+     s.lineTo(-w/2+r, h/2); s.quadraticCurveTo(-w/2, h/2,-w/2, h/2-r);
+     s.lineTo(-w/2, -h/2+r); s.quadraticCurveTo(-w/2,-h/2,-w/2+r,-h/2);
+     return s;
+    }
 
-function stadiumShape(length, thickness) {
-  const r = thickness / 2;
-  const half = length / 2 - r;
-  const s = new THREE.Shape();
-  s.moveTo(-half, -r);
-  s.lineTo( half, -r);
-  s.absarc( half, 0, r, -Math.PI/2, Math.PI/2, false);
-  s.lineTo(-half, r);
-  s.absarc(-half, 0, r,  Math.PI/2,-Math.PI/2, false);
-  return s;
-}
+    function stadiumShape(length, thickness) {
+     const r = thickness / 2;
+     const half = length / 2 - r;
+     const s = new THREE.Shape();
+     s.moveTo(-half, -r);
+     s.lineTo( half, -r);
+     s.absarc( half, 0, r, -Math.PI/2, Math.PI/2, false);
+     s.lineTo(-half, r);
+     s.absarc(-half, 0, r, Math.PI/2,-Math.PI/2, false);
+     return s;
+    }
 
-function extrude(shape, depth, bev, bevSegs, curvSegs) {
-  return new THREE.ExtrudeGeometry(shape, {
-    depth, bevelEnabled: bev > 0,
-    bevelSegments: bevSegs || 8,
-    bevelSize: bev || 0,
-    bevelThickness: bev || 0,
-    curveSegments: curvSegs || 24
-  });
-}
+    function extrude(shape, depth, bev, bevSegs, curvSegs) {
+     return new THREE.ExtrudeGeometry(shape, {
+      depth, bevelEnabled: bev > 0,
+      bevelSegments: bevSegs || 8,
+      bevelSize: bev || 0,
+      bevelThickness: bev || 0,
+      curveSegments: curvSegs || 24
+     });
+    }
 
-// ─────────────────────────────────────────────────────────────────
-// SCALE — 1 unit = 71.5 mm (real iPhone 14 width)
-// ─────────────────────────────────────────────────────────────────
-const U  = 1 / 71.5;
-const PW = 71.5 * U;   // 1.000
-const PH = 146.7 * U;  // 2.051
-const PR = 7.35  * U;  // corner radius
+    // ─────────────────────────────────────────────────────────────────
+    // SCALE — 1 unit = 71.5 mm (real iPhone 14 width)
+    // ─────────────────────────────────────────────────────────────────
+    const U = 1 / 71.5;
+    const PW = 71.5 * U; // 1.000
+    const PH = 146.7 * U; // 2.051
+    const PR = 7.35 * U; // corner radius
 
-// Depth: real is 7.8mm, we use 1/3 = 2.6mm
-const PD = 2.6 * U;    // 0.0364
+    // Depth: real is 7.8mm, we use 1/3 = 2.6mm
+    const PD = 2.6 * U; // 0.0364
 
-// Pebble bevel: nearly half the total depth so the edge is almost a full semicircle
-// bevel × 2 ≈ PD → bevel = PD * 0.46
-const BEVEL    = PD * 0.46;  // eats 92% of total depth, both sides
-const BEV_SEGS = 28;         // high segment count for silky smooth curve
+    // Pebble bevel: nearly half the total depth so the edge is almost a full semicircle
+    // bevel × 2 ≈ PD → bevel = PD * 0.46
+    const BEVEL = PD * 0.46; // eats 92% of total depth, both sides
+    const BEV_SEGS = 28; // high segment count for silky smooth curve
 
-const G = new THREE.Group();
-scene.add(G);
+    const G = new THREE.Group();
+    scene.add(G);
 
-// ─────────────────────────────────────────────────────────────────
-// BODY — thin pebble with very large rounded edges
-// ─────────────────────────────────────────────────────────────────
-const bodyGeo = extrude(rRect(PW, PH, PR), PD, BEVEL, BEV_SEGS, 32);
-bodyGeo.center();
-G.add(new THREE.Mesh(bodyGeo, smat(0xd4d8e2, 1.0, 0.07, 2.6)));
+    // ─────────────────────────────────────────────────────────────────
+    // BODY — thin pebble with very large rounded edges
+    // ─────────────────────────────────────────────────────────────────
+    const bodyGeo = extrude(rRect(PW, PH, PR), PD, BEVEL, BEV_SEGS, 32);
+    bodyGeo.center();
+    G.add(new THREE.Mesh(bodyGeo, smat(0xd4d8e2, 1.0, 0.07, 2.6)));
 
-// ─────────────────────────────────────────────────────────────────
-// SCREENSHOT SLOT
-// ─────────────────────────────────────────────────────────────────
-// ┌─────────────────────────────────────────────────────────────┐
-// │  TO USE YOUR OWN SCREENSHOT:                                │
-// │  1. Put your image file in the same folder as this HTML     │
-// │  2. Replace 'screenshot.png' with your actual filename      │
-// │  3. Image should be 390 × 844 px (iPhone 14 logical res)    │
-// └─────────────────────────────────────────────────────────────┘
-const sc = document.createElement('canvas');
-sc.width = 390; sc.height = 844;
-const sC = sc.getContext('2d');
+    // ─────────────────────────────────────────────────────────────────
+    // SCREENSHOT SLOT
+    // ─────────────────────────────────────────────────────────────────
+    // ┌─────────────────────────────────────────────────────────────┐
+    // │ TO USE YOUR OWN SCREENSHOT: │
+    // │ 1. Put your image file in the same folder as this HTML │
+    // │ 2. Replace 'Mockup1.png' with your actual filename │
+    // │ 3. Image should be 390 × 844 px (iPhone 14 logical res) │
+    // └─────────────────────────────────────────────────────────────┘
+    const sc = document.createElement('canvas');
+    sc.width = 390; sc.height = 844;
+    const sC = sc.getContext('2d');
 
-const scrTex = new THREE.CanvasTexture(sc);
+    const scrTex = new THREE.CanvasTexture(sc);
+    scrTex.encoding = THREE.sRGBEncoding;
 
-const img = new Image();
-img.crossOrigin = 'anonymous';
-img.onload = () => {
-  sC.drawImage(img, 0, 0, 390, 844);
-  scrTex.needsUpdate = true;
-};
-img.onerror = () => {
-  // Fallback placeholder if image doesn't load
-  const bg = sC.createLinearGradient(0,0,0,844);
-  bg.addColorStop(0,'#050510'); bg.addColorStop(.5,'#08121e'); bg.addColorStop(1,'#050510');
-  sC.fillStyle=bg; sC.fillRect(0,0,390,844);
-  sC.fillStyle='rgba(255,255,255,0.15)';
-  sC.font='400 22px -apple-system,sans-serif';
-  sC.textAlign='center'; sC.textBaseline='middle';
-  sC.fillText('screenshot.png',195,422);
-  scrTex.needsUpdate=true;
-};
-img.src = 'Mockup1.png'; // ← REPLACE WITH YOUR FILENAME
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+     sC.drawImage(img, 0, 0, 390, 844);
+     scrTex.needsUpdate = true;
+    };
+    img.onerror = () => {
+     console.error('Could not load Mockup1.png — check the file is in the same folder as index.html');
+     // Fallback placeholder if image doesn't load
+     const bg = sC.createLinearGradient(0,0,0,844);
+     bg.addColorStop(0,'#050510'); bg.addColorStop(.5,'#08121e'); bg.addColorStop(1,'#050510');
+     sC.fillStyle=bg; sC.fillRect(0,0,390,844);
+     sC.fillStyle='rgba(255,255,255,0.15)';
+     sC.font='400 22px -apple-system,sans-serif';
+     sC.textAlign='center'; sC.textBaseline='middle';
+     sC.fillText('Mockup1.png not found',195,422);
+     scrTex.needsUpdate=true;
+    };
+    img.src = 'Mockup1.png'; // ← REPLACE WITH YOUR FILENAME
 
-// ─────────────────────────────────────────────────────────────────
-// SCREEN PLANE
-// Bezel: 2.2mm sides, 2.8mm top/bottom
-// Screen sits at the outermost point of the front bevel curve
-// ─────────────────────────────────────────────────────────────────
-const bW = 2.2 * U;
-const bH = 2.8 * U;
-const scrW = PW - bW * 2;
-const scrH = PH - bH * 2;
+    // ─────────────────────────────────────────────────────────────────
+    // SCREEN PLANE
+    // Bezel: 2.2mm sides, 2.8mm top/bottom
+    // Screen sits at the outermost point of the front bevel curve
+    // ─────────────────────────────────────────────────────────────────
+    const bW = 2.2 * U;
+    const bH = 2.8 * U;
+    const scrW = PW - bW * 2;
+    const scrH = PH - bH * 2;
 
-// The front face peak sits at PD/2 + BEVEL (extrude goes 0→PD then bevel adds on top)
-const FRONT_Z = PD / 2 + BEVEL;
+    // The front face peak sits at PD/2 + BEVEL (extrude goes 0→PD then bevel adds on top)
+    const FRONT_Z = PD / 2 + BEVEL;
 
-const scrMat = new THREE.MeshStandardMaterial({
-  map: scrTex, metalness:0.0, roughness:0.02, envMap, envMapIntensity:0.3
-});
-const scrMesh = new THREE.Mesh(new THREE.PlaneGeometry(scrW, scrH), scrMat);
-scrMesh.position.set(0, 0, FRONT_Z - 0.001);
-G.add(scrMesh);
+    const scrMat = new THREE.MeshStandardMaterial({
+     map: scrTex, metalness:0.0, roughness:0.02, envMap, envMapIntensity:0.3
+    });
+    const scrMesh = new THREE.Mesh(new THREE.PlaneGeometry(scrW, scrH), scrMat);
+    scrMesh.position.set(0, 0, FRONT_Z - 0.001);
+    G.add(scrMesh);
 
-// Glass sheen over screen
-const glassMesh = new THREE.Mesh(
-  new THREE.PlaneGeometry(scrW, scrH),
-  new THREE.MeshStandardMaterial({
-    color:0xddeeff, metalness:0, roughness:0.01,
-    transparent:true, opacity:0.06, envMap, envMapIntensity:1.8
-  })
-);
-glassMesh.position.set(0, 0, FRONT_Z);
-G.add(glassMesh);
+    // Glass sheen over screen
+    const glassMesh = new THREE.Mesh(
+     new THREE.PlaneGeometry(scrW, scrH),
+     new THREE.MeshStandardMaterial({
+      color:0xddeeff, metalness:0, roughness:0.01,
+      transparent:true, opacity:0.06, envMap, envMapIntensity:1.8
+     })
+     );
+    glassMesh.position.set(0, 0, FRONT_Z);
+    G.add(glassMesh);
 
-// ─────────────────────────────────────────────────────────────────
-// BACK PANEL
-// ─────────────────────────────────────────────────────────────────
-const BACK_Z = -(PD / 2 + BEVEL);
-const backMesh = new THREE.Mesh(
-  new THREE.PlaneGeometry(PW - 4.4*U, PH - 4.4*U),
-  smat(0xc8ccd8, 1.0, 0.06, 2.6)
-);
-backMesh.rotation.y = Math.PI;
-backMesh.position.set(0, 0, BACK_Z + 0.001);
-G.add(backMesh);
+    // ─────────────────────────────────────────────────────────────────
+    // BACK PANEL
+    // ─────────────────────────────────────────────────────────────────
+    const BACK_Z = -(PD / 2 + BEVEL);
+    const backMesh = new THREE.Mesh(
+     new THREE.PlaneGeometry(PW - 4.4*U, PH - 4.4*U),
+     smat(0xc8ccd8, 1.0, 0.06, 2.6)
+     );
+    backMesh.rotation.y = Math.PI;
+    backMesh.position.set(0, 0, BACK_Z + 0.001);
+    G.add(backMesh);
 
-// Dynamic Island removed
+    // Dynamic Island removed
 
-// ─────────────────────────────────────────────────────────────────
-// LENSES — sit flush against the back face, no bump housing
-// ─────────────────────────────────────────────────────────────────
-const BUMP_CX = -14 * U;
-const BUMP_CY =  48 * U;
-const LENS_Z  = BACK_Z - 0.3*U; // flush against back surface
+    // ─────────────────────────────────────────────────────────────────
+    // LENSES — sit flush against the back face, no bump housing
+    // ─────────────────────────────────────────────────────────────────
+    const BUMP_CX = -14 * U;
+    const BUMP_CY = 48 * U;
+    const LENS_Z = BACK_Z - 0.3*U; // flush against back surface
 
-function addLens(lx, ly, radiusMM, isMain) {
-  const r  = radiusMM * U;
-  const lz = LENS_Z;
+    function addLens(lx, ly, radiusMM, isMain) {
+     const r = radiusMM * U;
+     const lz = LENS_Z;
 
-  // Outer silver ring
-  const ring = new THREE.Mesh(
-    new THREE.TorusGeometry(r, 0.9*U, 6, 52),
-    smat(0xdce0ec, 1.0, 0.04, 3.0)
-  );
-  ring.position.set(lx, ly, lz);
-  G.add(ring);
+     // Outer silver ring
+     const ring = new THREE.Mesh(
+      new THREE.TorusGeometry(r, 0.9*U, 6, 52),
+      smat(0xdce0ec, 1.0, 0.04, 3.0)
+      );
+     ring.position.set(lx, ly, lz);
+     G.add(ring);
 
-  // Dark barrel
-  const barrel = new THREE.Mesh(
-    new THREE.CylinderGeometry(r - 0.5*U, r - 0.5*U, 2.5*U, 48),
-    smat(0x0a0a0e, 0.05, 0.05, 0.5)
-  );
-  barrel.rotation.x = Math.PI/2;
-  barrel.position.set(lx, ly, lz);
-  G.add(barrel);
+     // Dark barrel
+     const barrel = new THREE.Mesh(
+      new THREE.CylinderGeometry(r - 0.5*U, r - 0.5*U, 2.5*U, 48),
+      smat(0x0a0a0e, 0.05, 0.05, 0.5)
+      );
+     barrel.rotation.x = Math.PI/2;
+     barrel.position.set(lx, ly, lz);
+     G.add(barrel);
 
-  // Lens glass
-  const glassR = r - 1.8*U;
-  const lensGlass = new THREE.Mesh(
-    new THREE.CircleGeometry(glassR, 48),
-    new THREE.MeshStandardMaterial({
-      color: isMain ? 0x060c1a : 0x040810,
-      metalness:0.0, roughness:0.0,
-      transparent:true, opacity:0.96,
-      envMap, envMapIntensity: isMain ? 1.4 : 1.0
-    })
-  );
-  lensGlass.rotation.y = Math.PI;
-  lensGlass.position.set(lx, ly, lz - 0.2*U);
-  G.add(lensGlass);
+     // Lens glass
+     const glassR = r - 1.8*U;
+     const lensGlass = new THREE.Mesh(
+      new THREE.CircleGeometry(glassR, 48),
+      new THREE.MeshStandardMaterial({
+       color: isMain ? 0x060c1a : 0x040810,
+       metalness:0.0, roughness:0.0,
+       transparent:true, opacity:0.96,
+       envMap, envMapIntensity: isMain ? 1.4 : 1.0
+      })
+      );
+     lensGlass.rotation.y = Math.PI;
+     lensGlass.position.set(lx, ly, lz - 0.2*U);
+     G.add(lensGlass);
 
-  // Inner element ring
-  const innerRing = new THREE.Mesh(
-    new THREE.TorusGeometry(glassR * 0.55, 0.4*U, 4, 36),
-    smat(0x1a2448, 0.0, 0.1, 0.8)
-  );
-  innerRing.position.set(lx, ly, lz - 0.3*U);
-  G.add(innerRing);
-}
+     // Inner element ring
+     const innerRing = new THREE.Mesh(
+      new THREE.TorusGeometry(glassR * 0.55, 0.4*U, 4, 36),
+      smat(0x1a2448, 0.0, 0.1, 0.8)
+      );
+     innerRing.position.set(lx, ly, lz - 0.3*U);
+     G.add(innerRing);
+    }
 
-addLens(BUMP_CX - 9*U, BUMP_CY + 9*U, 7.5, true);   // main
-addLens(BUMP_CX + 7*U, BUMP_CY - 8*U, 6.5, false);  // ultrawide
+    addLens(BUMP_CX - 9*U, BUMP_CY + 9*U, 7.5, true); // main
+    addLens(BUMP_CX + 7*U, BUMP_CY - 8*U, 6.5, false); // ultrawide
 
-// Flash and mic dot removed
+    // Flash and mic dot removed
 
-// ─────────────────────────────────────────────────────────────────
-// INTERACTION
-// ─────────────────────────────────────────────────────────────────
-let tRX=-0.08, tRY=0.20, rotX=-0.08, rotY=0.20;
-let vx=0, vy=0, drag=false, px=0, py=0, zoom=9.5;
-let lastInteract = 0;
-const AUTO_SPEED   = 0.004;
-const RESUME_DELAY = 1800;
+    // ─────────────────────────────────────────────────────────────────
+    // INTERACTION
+    // ─────────────────────────────────────────────────────────────────
+    let tRX=-0.08, tRY=0.20, rotX=-0.08, rotY=0.20;
+    let vx=0, vy=0, drag=false, px=0, py=0, zoom=9.5;
+    let lastInteract = 0;
+    const AUTO_SPEED = 0.004;
+    const RESUME_DELAY = 1800;
 
-canvas.addEventListener('mousedown', e=>{
-  drag=true; px=e.clientX; py=e.clientY; vx=vy=0; lastInteract=Date.now();
-});
-window.addEventListener('mouseup', ()=>{ drag=false; lastInteract=Date.now(); });
-window.addEventListener('mousemove', e=>{
-  if(!drag) return;
-  tRY += (e.clientX-px)*0.004; tRX += (e.clientY-py)*0.004;
-  vy=(e.clientX-px)*0.004; vx=(e.clientY-py)*0.004;
-  tRX=Math.max(-1.4,Math.min(1.4,tRX));
-  tRY=Math.max(-2.2,Math.min(2.2,tRY));
-  px=e.clientX; py=e.clientY;
-});
-canvas.addEventListener('touchstart', e=>{
-  drag=true; px=e.touches[0].clientX; py=e.touches[0].clientY; lastInteract=Date.now();
-},{passive:true});
-window.addEventListener('touchend', ()=>{ drag=false; lastInteract=Date.now(); });
-window.addEventListener('touchmove', e=>{
-  if(!drag) return;
-  tRY+=(e.touches[0].clientX-px)*0.004; tRX+=(e.touches[0].clientY-py)*0.004;
-  tRX=Math.max(-1.4,Math.min(1.4,tRX)); tRY=Math.max(-2.2,Math.min(2.2,tRY));
-  px=e.touches[0].clientX; py=e.touches[0].clientY;
-},{passive:true});
-canvas.addEventListener('wheel', e=>{
-  zoom=Math.max(5,Math.min(15,zoom+e.deltaY*0.012));
-  camera.position.z=zoom; e.preventDefault();
-},{passive:false});
+    canvas.addEventListener('mousedown', e=>{
+     drag=true; px=e.clientX; py=e.clientY; vx=vy=0; lastInteract=Date.now();
+    });
+    window.addEventListener('mouseup', ()=>{ drag=false; lastInteract=Date.now(); });
+    window.addEventListener('mousemove', e=>{
+     if(!drag) return;
+     tRY += (e.clientX-px)*0.004; tRX += (e.clientY-py)*0.004;
+     vy=(e.clientX-px)*0.004; vx=(e.clientY-py)*0.004;
+     tRX=Math.max(-1.4,Math.min(1.4,tRX));
+     tRY=Math.max(-2.2,Math.min(2.2,tRY));
+     px=e.clientX; py=e.clientY;
+    });
+    canvas.addEventListener('touchstart', e=>{
+     drag=true; px=e.touches[0].clientX; py=e.touches[0].clientY; lastInteract=Date.now();
+    },{passive:true});
+    window.addEventListener('touchend', ()=>{ drag=false; lastInteract=Date.now(); });
+    window.addEventListener('touchmove', e=>{
+     if(!drag) return;
+     tRY+=(e.touches[0].clientX-px)*0.004; tRX+=(e.touches[0].clientY-py)*0.004;
+     tRX=Math.max(-1.4,Math.min(1.4,tRX)); tRY=Math.max(-2.2,Math.min(2.2,tRY));
+     px=e.touches[0].clientX; py=e.touches[0].clientY;
+    },{passive:true});
+    canvas.addEventListener('wheel', e=>{
+     zoom=Math.max(5,Math.min(15,zoom+e.deltaY*0.012));
+     camera.position.z=zoom; e.preventDefault();
+    },{passive:false});
 
-document.getElementById('rst').addEventListener('click', ()=>{
-  tRX=-0.08; tRY=0.20; zoom=9.5; camera.position.z=zoom;
-});
-let showBack=false;
-document.getElementById('flip').addEventListener('click', ()=>{
-  showBack=!showBack; tRY=showBack?Math.PI:0.20; tRX=-0.06;
-});
+    document.getElementById('rst').addEventListener('click', ()=>{
+     tRX=-0.08; tRY=0.20; zoom=9.5; camera.position.z=zoom;
+    });
+    let showBack=false;
+    document.getElementById('flip').addEventListener('click', ()=>{
+     showBack=!showBack; tRY=showBack?Math.PI:0.20; tRX=-0.06;
+    });
 
-// ─────────────────────────────────────────────────────────────────
-// RENDER LOOP
-// ─────────────────────────────────────────────────────────────────
-function animate() {
-  requestAnimationFrame(animate);
-  const idle = !drag && (Date.now()-lastInteract > RESUME_DELAY);
-  if(!drag){ vx*=0.88; vy*=0.88; tRX+=vx; tRY+=vy; }
-  if(idle){ tRY+=AUTO_SPEED; tRX+=(0-tRX)*0.02; }
-  rotX+=(tRX-rotX)*0.10; rotY+=(tRY-rotY)*0.10;
-  G.rotation.x=rotX; G.rotation.y=rotY;
-  renderer.render(scene,camera);
-}
-animate();
+    // ─────────────────────────────────────────────────────────────────
+    // RENDER LOOP
+    // ─────────────────────────────────────────────────────────────────
+    function animate() {
+     requestAnimationFrame(animate);
+     const idle = !drag && (Date.now()-lastInteract > RESUME_DELAY);
+     if(!drag){ vx*=0.88; vy*=0.88; tRX+=vx; tRY+=vy; }
+     if(idle){ tRY+=AUTO_SPEED; tRX+=(0-tRX)*0.02; }
+     rotX+=(tRX-rotX)*0.10; rotY+=(tRY-rotY)*0.10;
+     G.rotation.x=rotX; G.rotation.y=rotY;
+     renderer.render(scene,camera);
+    }
+    animate();
 
-})();
-</script>
-</body>
+   })();
+  </script>
+ </body>
 </html>
